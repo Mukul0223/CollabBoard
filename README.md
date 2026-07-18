@@ -1,0 +1,1 @@
+CollabBoard is a real-time, highly interactive Kanban project management application, similar in sprit to Trello or Jira.
