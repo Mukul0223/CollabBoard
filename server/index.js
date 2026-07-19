@@ -12,6 +12,7 @@ require('dotenv').config() // Loads enviroment variables
 const logger = require('./middleware/logger')
 const configureCors = require('./config/cors')
 
+const unknownEndpoint = require('./middleware/unknownEndpoint')
 const errorHandler = require('./middleware/errorHandler')
 
 const app = express()
@@ -25,6 +26,7 @@ app.get('/', (req, res) => {
   res.send('Server is up and running!')
 })
 
+app.use(unknownEndpoint)
 app.use(errorHandler)
 
 PORT = process.env.PORT || 3001
