@@ -9,7 +9,13 @@ require('dotenv').config() // Loads enviroment variables
 // const validateEnv = require('./config/validateEnv')
 // validateEnv()
 
+const logger = require('./middleware/logger')
+const configureCors = require('./config/cors')
+
 const app = express()
+
+app.use(logger)
+configureCors(app)
 
 app.use(express.json())
 
