@@ -1,5 +1,13 @@
 const express = require('express')
-require('dotenv').config()
+
+require('dotenv').config() // Loads enviroment variables
+
+// Immediately validates if requires enviroment valriables are present or not
+/*
+ TO DO: Right now missing MONGODN_URI and JWT_SECRET
+*/
+// const validateEnv = require('./config/validateEnv')
+// validateEnv()
 
 const app = express()
 
