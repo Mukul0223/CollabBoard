@@ -11,9 +11,10 @@ require('dotenv').config() // Loads enviroment variables
 
 const logger = require('./middleware/logger')
 const configureCors = require('./config/cors')
-
 const unknownEndpoint = require('./middleware/unknownEndpoint')
 const errorHandler = require('./middleware/errorHandler')
+
+const healthRouter = require('./routes/health')
 
 const app = express()
 
@@ -25,15 +26,7 @@ app.use(express.json())
 app.get('/', (req, res) => {
   res.send('Server is up and running!')
 })
-
-app.get('/api/health', (req, res) => {
-  const timestamp = new Date().toString()
-  res.status(200).json({
-    status: 'success',
-    message: 'Server is running well and good.',
-    timestamp: new Date().toISOString()
-  })
-})
+app.use('/api/health', healthRouter)
 
 app.use(unknownEndpoint)
 app.use(errorHandler)
