@@ -1,38 +1,21 @@
-const express = require('express')
+// Load environment variables into process.env
+require('dotenv').config()
 
-require('dotenv').config() // Loads enviroment variables
+// Immediately validates the enviroment valriables
+const validateEnv = require('./config/validateEnv')
+validateEnv()
 
-// Immediately validates if requires enviroment valriables are present or not
-/*
- TO DO: Right now missing MONGODN_URI and JWT_SECRET
-*/
-// const validateEnv = require('./config/validateEnv')
-// validateEnv()
+// Load config and app setup after validation succeeds
+const env = require('./config/env')
+const app = require('./app')
+const connectDB = require('./config/db')
 
-const logger = require('./middleware/logger')
-const configureCors = require('./config/cors')
-const unknownEndpoint = require('./middleware/unknownEndpoint')
-const errorHandler = require('./middleware/errorHandler')
+const startServer = async () => {
+  await connectDB()
 
-const healthRouter = require('./routes/health')
+  app.listen(env.PORT, () => {
+    console.log(`Server is running on port ${env.PORT}`)
+  })
+}
 
-const app = express()
-
-app.use(logger)
-configureCors(app)
-
-app.use(express.json())
-
-app.get('/', (req, res) => {
-  res.send('Server is up and running!')
-})
-app.use('/api/health', healthRouter)
-
-app.use(unknownEndpoint)
-app.use(errorHandler)
-
-PORT = process.env.PORT || 3001
-
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`)
-})
+startServer()
