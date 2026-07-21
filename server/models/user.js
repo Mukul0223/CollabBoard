@@ -1,4 +1,5 @@
 const mongoose = require('mongoose')
+const bcrypt = require('bcryptjs')
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -23,6 +24,10 @@ const userSchema = new mongoose.Schema({
     required: [true, 'Password is required'],
   },
 }, { timestamps: true })
+
+userSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.passwordHash)
+}
 
 userSchema.set('toJSON', {
   transform: (document, returnedObject) => {

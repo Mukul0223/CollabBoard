@@ -6,6 +6,7 @@ const unknownEndpoint = require('./middleware/unknownEndpoint')
 const errorHandler = require('./middleware/errorHandler')
 
 const healthRouter = require('./routes/health')
+const authRouter = require('./routes/authRoutes')
 
 const app = express()
 
@@ -20,6 +21,7 @@ app.get('/', (req, res) => {
 })
 
 app.use('/api/health', healthRouter)
+app.use('/api/auth', authRouter)
 
 // Error Handling
 app.use(unknownEndpoint)
