@@ -12,7 +12,7 @@ const boardSchema = new mongoose.Schema({
     trim: true,
     maxlength: [500, 'Description cannot exceed 500 characters'],
   },
-  owner: {
+  user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: [true, 'Board owner is required'],
