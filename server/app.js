@@ -8,6 +8,7 @@ const errorHandler = require("./middleware/errorHandler");
 const healthRouter = require("./routes/health");
 const authRouter = require("./routes/authRoutes");
 const boardRouter = require("./routes/boardRoutes.js");
+const listRouter = require("./routes/listRoutes.js");
 
 const app = express();
 
@@ -24,10 +25,10 @@ app.get("/", (req, res) => {
 app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/boards", boardRouter);
+app.use("/api/lists", listRouter);
 
 // Error Handling
 app.use(unknownEndpoint);
 app.use(errorHandler);
 
 module.exports = app;
-
