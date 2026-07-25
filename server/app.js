@@ -9,6 +9,7 @@ const healthRouter = require("./routes/health");
 const authRouter = require("./routes/authRoutes");
 const boardRouter = require("./routes/boardRoutes.js");
 const listRouter = require("./routes/listRoutes.js");
+const cardRouter = require("./routes/cardRoutes.js");
 
 const app = express();
 
@@ -26,6 +27,7 @@ app.use("/api/health", healthRouter);
 app.use("/api/auth", authRouter);
 app.use("/api/boards", boardRouter);
 app.use("/api/lists", listRouter);
+app.use("/api/cards", cardRouter);
 
 // Error Handling
 app.use(unknownEndpoint);
