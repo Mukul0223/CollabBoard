@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const List = require("../models/list.js");
 const Board = require("../models/board.js");
 const Card = require("../models/card.js");
@@ -182,10 +183,85 @@ const deleteList = async (req, res, next) => {
   }
 };
 
+// PUT /api/lists/:id/move
+const moveList = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const listId = req.params.id;
+    const { position: destinationPosition } = req.body;
+
+    if (destinationPosition === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("position is required", 400));
+    }
+
+    const list = await List.findById(listId).session(session);
+    if (!list) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("List not found", 404));
+    }
+
+    const board = await Board.findById(list.board).session(session);
+    if (!board) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("Parent board not found", 404));
+    }
+
+    // Direct permission check using the board retrieved in session
+    const isOwner = board.user.toString() === req.user._id.toString();
+    const isMember = board.members.some(
+      (m) => m.toString() === req.user._id.toString(),
+    );
+
+    if (!isOwner && !isMember) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(
+        new AppError("Forbidden: You do not have access to this board", 403),
+      );
+    }
+
+    let boardLists = await List.find({
+      board: board._id,
+      _id: { $ne: list._id },
+    })
+      .sort({ position: 1 })
+      .session(session);
+
+    const targetIndex = Math.max(
+      0,
+      Math.min(destinationPosition, boardLists.length),
+    );
+
+    boardLists.splice(targetIndex, 0, list);
+
+    for (let i = 0; i < boardLists.length; i++) {
+      boardLists[i].position = i;
+      await boardLists[i].save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const updatedList = await List.findById(listId);
+    res.status(200).json(updatedList);
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
 module.exports = {
   createList,
   getListsByBoard,
   getListById,
   updateList,
   deleteList,
+  moveList,
 };

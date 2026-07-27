@@ -6,6 +6,7 @@ const {
   getListById,
   updateList,
   deleteList,
+  moveList,
 } = require("../controllers/listController");
 
 listRouter.use(authenticateUser);
@@ -18,5 +19,6 @@ listRouter.get("/board/:boardId", getListsByBoard);
 listRouter.get("/:id", getListById);
 listRouter.put("/:id", updateList);
 listRouter.delete("/:id", deleteList);
+listRouter.put("/:id/move", moveList);
 
 module.exports = listRouter;

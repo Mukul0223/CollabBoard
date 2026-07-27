@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const Card = require("../models/card.js");
 const List = require("../models/list.js");
 const Board = require("../models/board.js");
@@ -56,7 +57,7 @@ const createCard = async (req, res, next) => {
       board: board._id,
       position: position !== undefined ? position : 0,
       dueDate: dueDate || null,
-      labels: labels || [], // Added labels support
+      labels: labels || [],
     });
 
     await card.save();
@@ -149,7 +150,7 @@ const updateCard = async (req, res, next) => {
         : card.description;
     if (req.body.position !== undefined) card.position = req.body.position;
     if (req.body.dueDate !== undefined) card.dueDate = req.body.dueDate;
-    if (req.body.labels !== undefined) card.labels = req.body.labels; // Added labels update
+    if (req.body.labels !== undefined) card.labels = req.body.labels;
 
     // Allow moving card to another list on the same board
     if (req.body.list) {
@@ -198,10 +199,119 @@ const deleteCard = async (req, res, next) => {
   }
 };
 
+// PUT /api/cards/:id/move
+const moveCard = async (req, res, next) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const cardId = req.params.id;
+    const { destinationListId, destinationPosition } = req.body;
+
+    if (!destinationListId || destinationPosition === undefined) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(
+        new AppError(
+          "destinationListId and destinationPosition are required",
+          400,
+        ),
+      );
+    }
+
+    const card = await Card.findById(cardId).session(session);
+    if (!card) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("Card not found", 404));
+    }
+
+    const board = await Board.findById(card.board).session(session);
+    if (!board) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("Parent board not found", 404));
+    }
+
+    const { isAllowed } = await checkListAccess(card.list, req.user._id);
+    if (!isAllowed) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(
+        new AppError("Forbidden: You do not have access to this board", 403),
+      );
+    }
+
+    const destinationList =
+      await List.findById(destinationListId).session(session);
+    if (
+      !destinationList ||
+      destinationList.board.toString() !== board._id.toString()
+    ) {
+      await session.abortTransaction();
+      session.endSession();
+      return next(new AppError("Invalid destination list", 400));
+    }
+
+    const sourceListId = card.list.toString();
+    const isInterListMove = sourceListId !== destinationListId.toString();
+
+    // 1. Re-index source list if inter-list move
+    if (isInterListMove) {
+      const sourceCards = await Card.find({
+        list: sourceListId,
+        _id: { $ne: card._id },
+      })
+        .sort({ position: 1 })
+        .session(session);
+
+      for (let i = 0; i < sourceCards.length; i++) {
+        if (sourceCards[i].position !== i) {
+          sourceCards[i].position = i;
+          await sourceCards[i].save({ session });
+        }
+      }
+    }
+
+    // 2. Re-index destination list
+    let destCards = await Card.find({
+      list: destinationListId,
+      _id: { $ne: card._id },
+    })
+      .sort({ position: 1 })
+      .session(session);
+
+    card.list = destinationListId;
+
+    const targetIndex = Math.max(
+      0,
+      Math.min(destinationPosition, destCards.length),
+    );
+
+    destCards.splice(targetIndex, 0, card);
+
+    for (let i = 0; i < destCards.length; i++) {
+      destCards[i].position = i;
+      await destCards[i].save({ session });
+    }
+
+    await session.commitTransaction();
+    session.endSession();
+
+    const updatedCard = await Card.findById(cardId);
+    res.status(200).json(updatedCard);
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    next(error);
+  }
+};
+
 module.exports = {
   createCard,
   getCardsByList,
   getCardById,
   updateCard,
   deleteCard,
+  moveCard,
 };

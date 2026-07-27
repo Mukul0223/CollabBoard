@@ -6,6 +6,7 @@ const {
   getCardById,
   updateCard,
   deleteCard,
+  moveCard,
 } = require("../controllers/cardController");
 
 cardRouter.use(authenticateUser);
@@ -18,5 +19,6 @@ cardRouter.get("/list/:listId", getCardsByList);
 cardRouter.get("/:id", getCardById);
 cardRouter.put("/:id", updateCard);
 cardRouter.delete("/:id", deleteCard);
+cardRouter.pu("/:id/move", moveCard);
 
 module.exports = cardRouter;
