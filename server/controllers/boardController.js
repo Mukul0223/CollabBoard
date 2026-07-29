@@ -6,10 +6,17 @@ const AppError = require("../utils/AppError.js");
 
 // --- HELPER FUNCTIONS ---
 const isBoardCollaborator = (board, userId) => {
-  const isOwner = board.user.toString() === userId.toString();
-  const isMember = board.members.some(
-    (memberId) => memberId.toString() === userId.toString(),
-  );
+  // Return false early if critical arguments or properties are missing
+  if (!board?.user || !board?.members || !userId) return false;
+
+  const getId = (entity) => (entity?._id ? entity._id : entity).toString();
+  const targetUserId = userId.toString();
+
+  const isOwner = getId(board.user) === targetUserId;
+  const isMember =
+    Array.isArray(board.members) &&
+    board.members.some((member) => getId(member) === targetUserId);
+
   return isOwner || isMember;
 };
 
@@ -73,7 +80,21 @@ const getBoardId = async (req, res, next) => {
       );
     }
 
-    res.status(200).json(board);
+    // 1. Fetch lists belonging to this board sorted by position
+    const lists = await List.find({ board: id }).sort({ position: 1 });
+
+    // 2. Fetch cards belonging to all these lists sorted by position
+    const listIds = lists.map((l) => l._id);
+    const cards = await Card.find({ list: { $in: listIds } }).sort({
+      position: 1,
+    });
+
+    // 3. Return the full board payload that the React frontend expects
+    res.status(200).json({
+      board,
+      lists,
+      cards,
+    });
   } catch (error) {
     next(error);
   }
@@ -132,6 +153,12 @@ const deleteBoard = async (req, res, next) => {
     await List.deleteMany({ board: board._id });
     await Board.findByIdAndDelete(board._id);
 
+    // Socket.IO emission after DB deletion
+    const io = req.app.get("io");
+    if (io) {
+      io.to(id).emit("board_deleted", { boardId: id });
+    }
+
     res.status(200).json({
       message: "Board and all associated lists and cards deleted successfully",
     });
@@ -178,6 +205,12 @@ const addMember = async (req, res, next) => {
     board.members.push(userToAdd._id);
     await board.save();
 
+    // Socket.IO emission after DB update
+    const io = req.app.get("io");
+    if (io) {
+      io.to(req.params.id).emit("board_updated", { type: "MEMBER_CHANGE" });
+    }
+
     res.status(200).json({
       message: "Member added successfully",
       board,
@@ -208,6 +241,12 @@ const removeMember = async (req, res, next) => {
     );
 
     await board.save();
+
+    // Socket.IO emission after DB update
+    const io = req.app.get("io");
+    if (io) {
+      io.to(id).emit("board_updated", { type: "MEMBER_CHANGE" });
+    }
 
     res.status(200).json({
       message: "Member removed successfully",

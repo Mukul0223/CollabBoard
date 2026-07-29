@@ -29,10 +29,10 @@ export const useBoardStore = create((set, get) => ({
 
     // Calculate new position array locally
     const currentLists = [...previousLists];
-    const listToMove = currentLists.find((l) => l._id === listId);
+    const listToMove = currentLists.find((l) => l.id === listId);
     if (!listToMove) return;
 
-    const filteredLists = currentLists.filter((l) => l._id !== listId);
+    const filteredLists = currentLists.filter((l) => l.id !== listId);
     filteredLists.splice(destinationPosition, 0, listToMove);
 
     // Re-index position fields
@@ -80,7 +80,7 @@ export const useBoardStore = create((set, get) => ({
         : [...(updatedCards[targetListId] || [])];
 
     // Find and remove dragged card
-    const cardIndex = sourceCards.findIndex((c) => c._id === cardId);
+    const cardIndex = sourceCards.findIndex((c) => c.id === cardId);
     if (cardIndex === -1) return;
 
     const [movedCard] = sourceCards.splice(cardIndex, 1);

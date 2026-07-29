@@ -5,7 +5,7 @@ const BoardCard = ({ board }) => {
 
   return (
     <div
-      onClick={() => navigate(`/board/${board._id}`)}
+      onClick={() => navigate(`/board/${board.id}`)}
       className="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md hover:border-indigo-500 transition-all cursor-pointer flex flex-col justify-between h-36"
     >
       <div>

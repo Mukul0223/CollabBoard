@@ -19,6 +19,6 @@ cardRouter.get("/list/:listId", getCardsByList);
 cardRouter.get("/:id", getCardById);
 cardRouter.put("/:id", updateCard);
 cardRouter.delete("/:id", deleteCard);
-cardRouter.pu("/:id/move", moveCard);
+cardRouter.put("/:id/move", moveCard);
 
 module.exports = cardRouter;

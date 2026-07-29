@@ -1,21 +1,23 @@
 // Load environment variables into process.env
-require('dotenv').config()
+require("dotenv").config();
 
-// Immediately validates the enviroment valriables
-const validateEnv = require('./config/validateEnv')
-validateEnv()
+// Immediately validates the environment variables
+const validateEnv = require("./config/validateEnv");
+validateEnv();
 
-// Load config and app setup after validation succeeds
-const env = require('./config/env')
-const app = require('./app')
-const connectDB = require('./config/db')
+// Load config and HTTP server setup after validation succeeds
+const env = require("./config/env");
+const { server } = require("./app");
+const connectDB = require("./config/db");
 
 const startServer = async () => {
-  await connectDB()
+  await connectDB();
 
-  app.listen(env.PORT, () => {
-    console.log(`Server is running on port ${env.PORT}`)
-  })
-}
+  // Must listen using `server`, not `app`
+  server.listen(env.PORT, () => {
+    console.log(`Server is running on port ${env.PORT}`);
+  });
+};
 
-startServer()
+startServer();
+

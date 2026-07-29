@@ -1,26 +1,55 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { loginApi } from "../services/authService";
+import { useAuthStore } from "../store/authStore";
 
-const LoginPage = ({ onSubmit }) => {
+const LoginPage = () => {
   const [formData, setFormData] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState({});
+  const [serverError, setServerError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const setAuth = useAuthStore((state) => state.setAuth);
+  const navigate = useNavigate();
 
   const validate = () => {
     const newErrors = {};
     if (!formData.email) newErrors.email = "Email is required";
-    else if (!/\S+@\S+\.\S+/.test(formData.email))
-      newErrors.email = "Invalid email address";
-
     if (!formData.password) newErrors.password = "Password is required";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setServerError("");
     if (!validate()) return;
-    if (onSubmit) onSubmit(formData);
-    else console.log("Login form payload:", formData);
+
+    try {
+      setLoading(true);
+      const data = await loginApi(formData);
+
+      // Debug log to check exact backend structure in browser console
+      console.log("Login API Response:", data);
+
+      // Safely extract token and user whether they are top-level or nested under `data`
+      const user = data.user || data.data?.user;
+      const token = data.token || data.accessToken || data.data?.token;
+
+      if (!token) {
+        setServerError("Authentication token missing from server response.");
+        return;
+      }
+
+      setAuth(user, token);
+      navigate("/dashboard");
+    } catch (err) {
+      setServerError(
+        err.response?.data?.message || "Invalid credentials. Please try again.",
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -29,6 +58,12 @@ const LoginPage = ({ onSubmit }) => {
         <h2 className="text-2xl font-bold text-center mb-6 text-gray-800">
           Sign in to CollabBoard
         </h2>
+
+        {serverError && (
+          <div className="mb-4 p-3 bg-red-50 text-red-700 text-sm rounded border border-red-200">
+            {serverError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -77,9 +112,10 @@ const LoginPage = ({ onSubmit }) => {
 
           <button
             type="submit"
-            className="w-full bg-indigo-600 text-white p-2.5 rounded-md font-medium text-sm hover:bg-indigo-700 transition-colors cursor-pointer"
+            disabled={loading}
+            className="w-full bg-indigo-600 text-white p-2.5 rounded-md font-medium text-sm hover:bg-indigo-700 transition-colors disabled:opacity-50 cursor-pointer"
           >
-            Sign In
+            {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
 
