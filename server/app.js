@@ -2,7 +2,9 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 
+const env = require("./config/env");
 const configureCors = require("./config/cors");
+const { corsOptions } = require("./config/cors"); // Import corsOptions
 const logger = require("./middleware/logger");
 const unknownEndpoint = require("./middleware/unknownEndpoint");
 const errorHandler = require("./middleware/errorHandler");
@@ -18,22 +20,22 @@ const app = express();
 // 1. Create HTTP server from express app
 const server = http.createServer(app);
 
-// 2. Initialize Socket.IO
+// 2. Configure CORS middleware first before setting up Socket.IO
+configureCors(app);
+
+// 3. Initialize Socket.IO with shared dynamic CORS options
 const io = new Server(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    methods: ["GET", "POST"],
-  },
+  cors: corsOptions,
 });
 
-// 3. Attach socket.io instance so routes/controllers can access req.app.get("io")
+// 4. Attach socket.io instance
 app.set("io", io);
 
-// 4. Socket connection listeners
+// 5. Socket connection listeners
 io.on("connection", (socket) => {
   console.log(`User Connected: ${socket.id}`);
 
-  // Board room management
+  // --- Board Room Management ---
   socket.on("join_board", (boardId) => {
     socket.join(boardId);
     console.log(`Socket ${socket.id} joined board room: ${boardId}`);
@@ -44,15 +46,39 @@ io.on("connection", (socket) => {
     console.log(`Socket ${socket.id} left board room: ${boardId}`);
   });
 
-  // --- ADDED: Drag-and-Drop Real-time Broadcasts ---
-  socket.on("move_card", (data) => {
-    // Relay to all subscribers in this room EXCEPT the sender
-    socket.to(data.boardId).emit("card_moved", data);
+  // --- Board Events ---
+  socket.on("board_updated", (data) => {
+    socket.to(data.boardId).emit("board_updated", data);
+  });
+
+  socket.on("board_deleted", (data) => {
+    socket.to(data.boardId).emit("board_deleted", data);
+  });
+
+  // --- List CRUD Events ---
+  socket.on("create_list", (data) => {
+    socket.to(data.boardId).emit("list_created", data);
   });
 
   socket.on("move_list", (data) => {
-    // Relay to all subscribers in this room EXCEPT the sender
     socket.to(data.boardId).emit("list_moved", data);
+  });
+
+  socket.on("delete_list", (data) => {
+    socket.to(data.boardId).emit("delete_list", data);
+  });
+
+  // --- Card CRUD Events ---
+  socket.on("create_card", (data) => {
+    socket.to(data.boardId).emit("card_created", data);
+  });
+
+  socket.on("move_card", (data) => {
+    socket.to(data.boardId).emit("card_moved", data);
+  });
+
+  socket.on("delete_card", (data) => {
+    socket.to(data.boardId).emit("card_deleted", data);
   });
 
   socket.on("disconnect", () => {
@@ -61,7 +87,6 @@ io.on("connection", (socket) => {
 });
 
 // Global Middlewares
-configureCors(app);
 app.use(logger);
 app.use(express.json());
 

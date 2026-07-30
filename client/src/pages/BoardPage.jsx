@@ -5,6 +5,7 @@ import {
   getBoardByIdApi,
   createListApi,
   createCardApi,
+  updateCardApi,
   deleteBoardApi,
   deleteListApi,
   deleteCardApi,
@@ -18,6 +19,7 @@ import { socket } from "../services/socket";
 import BoardHeader from "../components/BoardHeader";
 import List from "../components/List";
 import Modal from "../components/Modal";
+import CardDetailModal from "../components/CardDetailModal";
 
 const BoardPage = () => {
   const { boardId } = useParams();
@@ -45,7 +47,11 @@ const BoardPage = () => {
   const [memberError, setMemberError] = useState("");
   const [addingMember, setAddingMember] = useState(false);
 
-  // Fetch Board Data Helper
+  // Card Modal State
+  const [selectedCard, setSelectedCard] = useState(null);
+  const [isCardModalOpen, setIsCardModalOpen] = useState(false);
+
+  // Fetch Board Details
   const fetchBoardDetails = useCallback(
     async (silent = false) => {
       if (!boardId || boardId === "undefined") return;
@@ -79,7 +85,7 @@ const BoardPage = () => {
     [boardId, setCurrentBoard, setLists, setCards, setLoading, setError],
   );
 
-  // Initial Load & Socket Listeners
+  // Real-Time Socket Listeners (Includes Granular Listeners)
   useEffect(() => {
     fetchBoardDetails();
 
@@ -87,25 +93,39 @@ const BoardPage = () => {
 
     socket.emit("join_board", boardId);
 
-    const handleBoardUpdated = () => fetchBoardDetails(true);
+    // Refresh handlers for incoming granular socket events
+    const handleSync = () => fetchBoardDetails(true);
     const handleBoardDeleted = () => {
       alert("This board was deleted by the owner.");
       navigate("/dashboard");
     };
 
-    socket.on("board_updated", handleBoardUpdated);
+    // Listen to generic + granular event triggers
+    socket.on("board_updated", handleSync);
+    socket.on("card_created", handleSync);
+    socket.on("card_moved", handleSync);
+    socket.on("card_deleted", handleSync);
+    socket.on("list_created", handleSync);
+    socket.on("list_moved", handleSync);
+    socket.on("list_deleted", handleSync);
     socket.on("board_deleted", handleBoardDeleted);
 
     return () => {
       socket.emit("leave_board", boardId);
-      socket.off("board_updated", handleBoardUpdated);
+      socket.off("board_updated", handleSync);
+      socket.off("card_created", handleSync);
+      socket.off("card_moved", handleSync);
+      socket.off("card_deleted", handleSync);
+      socket.off("list_created", handleSync);
+      socket.off("list_moved", handleSync);
+      socket.off("list_deleted", handleSync);
       socket.off("board_deleted", handleBoardDeleted);
     };
   }, [boardId, fetchBoardDetails, navigate]);
 
-  // Handle Drag and Drop End
-  const handleDragEnd = (result) => {
-    const { destination, source, type } = result;
+  // Handle Drag & Drop with API Persistence
+  const handleDragEnd = async (result) => {
+    const { destination, source, draggableId, type } = result;
     if (!destination) return;
     if (
       destination.droppableId === source.droppableId &&
@@ -119,12 +139,8 @@ const BoardPage = () => {
       const [moved] = reorderedLists.splice(source.index, 1);
       reorderedLists.splice(destination.index, 0, moved);
 
-      setLists(reorderedLists); // Optimistic UI update
-      socket.emit("move_list", {
-        boardId,
-        sourceIndex: source.index,
-        destinationIndex: destination.index,
-      });
+      setLists(reorderedLists);
+      socket.emit("move_list", { boardId, listId: draggableId });
       return;
     }
 
@@ -139,23 +155,73 @@ const BoardPage = () => {
         : Array.from(cards[destListId] || []);
 
     const [movedCard] = sourceCards.splice(source.index, 1);
-    destCards.splice(destination.index, 0, movedCard);
+    const updatedCard = { ...movedCard, list: destListId };
 
+    destCards.splice(destination.index, 0, updatedCard);
+
+    // 1. Optimistic UI update
     setCards({
       ...cards,
       [sourceListId]: sourceCards,
       [destListId]: destCards,
-    }); // Optimistic UI update
-
-    socket.emit("move_card", {
-      boardId,
-      cardId: movedCard.id || movedCard._id,
-      sourceListId,
-      destListId,
     });
+
+    // 2. Broadcast specific live socket move
+    socket.emit("move_card", { boardId, cardId: draggableId });
+
+    // 3. Persist to database
+    try {
+      await updateCardApi(draggableId, {
+        list: destListId,
+        position: destination.index,
+      });
+    } catch (err) {
+      console.error("Failed to persist card position:", err);
+      fetchBoardDetails(true);
+    }
   };
 
-  // Actions (Delete, Create List, Member Handlers)
+  // Card Handlers
+  const handleCardClick = (card) => {
+    setSelectedCard(card);
+    setIsCardModalOpen(true);
+  };
+
+  const handleUpdateCardDetails = async (cardId, updatedFields) => {
+    try {
+      await updateCardApi(cardId, updatedFields);
+      await fetchBoardDetails(true);
+      socket.emit("board_updated", { boardId });
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to update card");
+    }
+  };
+
+  const handleAddCard = async (listId, cardTitle) => {
+    try {
+      const currentListCards = cards[listId] || [];
+      const newCard = await createCardApi(listId, {
+        title: cardTitle,
+        position: currentListCards.length,
+      });
+      setCards({ ...cards, [listId]: [...currentListCards, newCard] });
+      socket.emit("create_card", { boardId, card: newCard });
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to create card");
+    }
+  };
+
+  const handleDeleteCard = async (cardId) => {
+    try {
+      await deleteCardApi(cardId);
+      await fetchBoardDetails(true);
+      socket.emit("delete_card", { boardId, cardId });
+    } catch (err) {
+      setError(err.response?.data?.message || "Failed to delete card");
+    }
+  };
+
+  // List & Member Handlers
   const handleDeleteBoard = async () => {
     if (!window.confirm("Delete this board?")) return;
     try {
@@ -179,7 +245,7 @@ const BoardPage = () => {
       setCards({ ...cards, [newList.id || newList._id]: [] });
       setNewListTitle("");
       setIsAddingList(false);
-      socket.emit("board_updated", { boardId });
+      socket.emit("create_list", { boardId, list: newList });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to create list");
     }
@@ -190,33 +256,9 @@ const BoardPage = () => {
     try {
       await deleteListApi(listId);
       setLists(lists.filter((l) => (l.id || l._id) !== listId));
-      socket.emit("board_updated", { boardId });
+      socket.emit("delete_list", { boardId, listId });
     } catch (err) {
       setError(err.response?.data?.message || "Failed to delete list");
-    }
-  };
-
-  const handleAddCard = async (listId, cardTitle) => {
-    try {
-      const currentListCards = cards[listId] || [];
-      const newCard = await createCardApi(listId, {
-        title: cardTitle,
-        position: currentListCards.length,
-      });
-      setCards({ ...cards, [listId]: [...currentListCards, newCard] });
-      socket.emit("board_updated", { boardId });
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to create card");
-    }
-  };
-
-  const handleDeleteCard = async (cardId) => {
-    try {
-      await deleteCardApi(cardId);
-      fetchBoardDetails(true);
-      socket.emit("board_updated", { boardId });
-    } catch (err) {
-      setError(err.response?.data?.message || "Failed to delete card");
     }
   };
 
@@ -289,7 +331,7 @@ const BoardPage = () => {
         </div>
       )}
 
-      {/* Kanban Drag Drop Board */}
+      {/* Drag & Drop Kanban Area */}
       <DragDropContext onDragEnd={handleDragEnd}>
         <Droppable
           droppableId="all-columns"
@@ -313,13 +355,13 @@ const BoardPage = () => {
                     onAddCard={handleAddCard}
                     onDeleteCard={handleDeleteCard}
                     onDeleteList={handleDeleteList}
-                    onCardClick={(card) => console.log("Card Clicked", card)}
+                    onCardClick={handleCardClick}
                   />
                 );
               })}
               {provided.placeholder}
 
-              {/* Add List Input */}
+              {/* Add List Form */}
               <div className="w-72 shrink-0">
                 {isAddingList ? (
                   <form
@@ -363,6 +405,15 @@ const BoardPage = () => {
           )}
         </Droppable>
       </DragDropContext>
+
+      {/* Card Detail Modal */}
+      <CardDetailModal
+        isOpen={isCardModalOpen}
+        onClose={() => setIsCardModalOpen(false)}
+        card={selectedCard}
+        onUpdateCard={handleUpdateCardDetails}
+        onDeleteCard={handleDeleteCard}
+      />
 
       {/* Invite Member Modal */}
       <Modal
