@@ -80,7 +80,7 @@ Before running CollabBoard locally, make sure you have:
 ### 2. Clone the Repository
 
 ```bash
-git clone https://github.com/your-username/collabboard.git
+git clone https://github.com/mukul0223/collabboard.git
 cd collabboard
 ```
 
